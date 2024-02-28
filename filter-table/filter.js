@@ -4,50 +4,43 @@
 class FilterTable {
     /**
      * FilterTable - コンストラクタ
-     * @param {object} table テーブルのDOM
+     * @param {HTMLTableElement} table テーブルのDOM
      */
     constructor(table){
         this.table = table;
         this.columns = table.tHead.rows[0].children;
         this.rows = table.tBodies[0].rows;
         this.filterIcons = [];
-        this.deleteRows = [];
-        this.regenerateRows = [];
     }
 
     /**
      * 行の表示を切り替える
      * 
-     * @param {array} values リストの中でチェックが入っているチェックボックスの値の配列→
-     * @param {int} columnIndex 列番号
+     * @param {Array} values リストの中でチェックが入っているチェックボックスの値の配列→
+     * @param {number} columnIndex 列番号
+     * @returns {void}
      */
-    switchingDisplayOfRows(checkingStatus,columnIndex){
-        // プロパティの初期化
-        this.deleteRows = [];
-        this.regenerateRows = [];
+    switchingDisplay(checkingStatus,columnIndex){
+
         // テーブルのすべての行に対するループ処理
         Array.prototype.forEach.call(this.rows,row => {
-
+            const value = row.children[columnIndex].innerHTML;
+                
             // 既に表示されている場合
             if(!row.classList.contains('hide')){
-                const value = row[columnIndex];
-
-                // チェックがtrueの場合
-                if(checkingStatus[value]){
-
+                
+                // チェックが入っていない場合
+                if(!checkingStatus[value]){
                     // 行を隠す
                     row.classList.add('hide');
-                    this.deleteRows.push(row);
                 }
 
-                // 表示されていない場合
             }else{
-                // さっき消した行の中にこの行が入っている且つ、チェックが入っていれば
-                if(!checkingStatus[value]){
+                // 表示されていない行且つ、チェックが入っていれば
+                if(checkingStatus[value]){
 
                     // 行を表示する
                     row.classList.remove('hide');
-                    this.regenerateRows.push(row);
                 }
             }
         });
@@ -56,7 +49,7 @@ class FilterTable {
     /**
      * 現在表示されている行を抽出するメソッド
      * 
-     * @return {array} 現在表示されている行の配列
+     * @returns {Array} 現在表示されている行の配列
      */
     getVisibleRows(){
         return Array.prototype.filter.call(this.rows,row=>{
@@ -71,81 +64,110 @@ class FilterTable {
 class FilterController {
     /**
      * FilterController - コンストラクタ
-     * @param {object} table フィルターテーブルインスタンス 
+     * @param {FilterTable} table フィルターテーブルインスタンス 
      */
     constructor(table){
         this.filterTable = table;
-        this.visibleRows = [];
         this.filterOrders = [];
     }
 
     /**
      * フィルター実行ボタン押下時に起動する
+     * 
+     * @param {object} e イベントオフジェクト
+     * @returns {void}
      */
     execute(e){
         //ボタンが押された列番号を取得
         const index = this.getColumnIndex(e);
-        console.log(index)
 
         //該当モーダルを特定
-        const modal = this.filterTable.filterIcons[index].modal;
+        const icon = this.filterTable.filterIcons[index];
+        const modal = icon.modal;
         
         //モーダルを閉じる
         modal.close();
 
-        //チェックされている値の配列を取得
-        const values = modal.filterList.getCheckedValues();
-
-        // モーダルがフィルターされている場合
-        if(modal.isFilter()){
-
-            // this.filterOrdersに追加
-            this.filterOrders.push(index);   
-        
-        }else{
-
-            // それ以外はthis.filterOrdersから削除
-            this.filterOrdersRemove(index);
+        // チェック状態が前回のチェック状態と同じなら終了
+        if(modal.filterList.isSame()){
+            return;
         }
-
+            
+        // モーダルが一つでもフィルターされている場合（いずれかのチェックが外れている場合）
+        if(modal.isFilter()){
+                
+            // フィルター順序記録配列に含まれていない場合
+            if(!this.filterOrders.includes(index)){
+                
+                // 文字黒、背景薄いグレーにする
+            this.filterOrders.forEach(columnIndex => {
+                this.filterTable.filterIcons[columnIndex].color('black','dimgray')
+            });
+            
+            // フィルター順序記録配列に列番号を追加
+            this.filterOrders.push(index);
+            
+            // 文字、白、背景濃いグレー
+            icon.color('white','dimgray');
+            }
+            
+        }else{
+            // モーダルが一つもフィルターされていない場合、最後の要素を削除
+            this.filterOrders.pop();
+            
+            // 文字、白、背景濃いグレー
+            icon.color('black','gainsboro');
+            
+            // 最後にフィルターされた値を文字、白、背景濃いグレー
+            if(this.filterOrders.length > 0){
+                this.filterTable.filterIcons[this.filterOrders[this.filterOrders.length - 1]].color('white','dimgray');
+            }
+            
+        }
+        
+        console.log(this.filterOrders);
+        
         // 当該モーダルの全チェックリストのチェック状態を保持した連想配列を取得
-        const checkingStatus = modal.filterList.getChekingStatus();
-
+        const checkingStatus = modal.filterList.getCheckingStatus();
+        
         //行の表示を切り替える
-        this.filterTable.switchingDisplayOfRows(checkingStatus,index);
-
+        this.filterTable.switchingDisplay(checkingStatus,index);
+        
         //表示中の行を取得
         const visibleRows = this.filterTable.getVisibleRows();
-
-        // 当該モーダル以外のリストを更新する
+        
+        // 最後にフィルターの列番号を取得
         const lastFilterIndex = this.getLastFilterIndex();
+
+        // フィルターモーダルをループ
         for(let icon of this.filterTable.filterIcons){
+
+            // モーダル列番号と今回ボタンを押されたモーダル列番号が違う場合
             if(icon.columnIndex !== index){
+
+                // リストの切り替え処理
                 icon.modal.filterList.switchingDisplay(
-                    this.filterTable.deleteRows,
-                    this.filterTable.regenerateRows,
-                    icon.columnIndex,
-                    lastFilterIndex
+                    visibleRows,icon.columnIndex,index
                 );
+
+                if(icon.columnIndex == lastFilterIndex){
+
+                    // 復元処理
+                    icon.modal.filterList.redisplay(index); 
+                }
+            }else{
+
             }
         }
     }
 
     /**
-     * filterOrdersから値を削除する
-     */
-    filterOrdersRemove(columnIndex){
-        const targetIndex = this.filterOrders.findIndex(filterIndex => filterIndex == columnIndex);
-        this.filterOrders.splice(targetIndex,1);
-    }
-
-    /**
-     * 最後にフィルターされた列番号
+     * 最後にフィルターされた列番号を取得する
      * 
-     * @return {int} 最後にフィルターされた列番号
+     * @returns {number} 最後にフィルターされた列番号
      */
     getLastFilterIndex(){
-        return this.filterOrders.pop();
+        return this.filterOrders[this.filterOrders.length - 1];
     }
 
 
@@ -153,10 +175,9 @@ class FilterController {
      * クリックイベント発生時、実行対象の列番号を取得する
      * 
      * @param {object} e イベントオブジェクト 
-     * @returns {int} フィルター実行対象列番号
+     * @returns {number} フィルター実行対象列番号
      */
     getColumnIndex(e){
-        console.log(e.target)
         const pushedIcon = this.filterTable.filterIcons.filter(icon => {
             return e.target == icon.modal.exeBtn;
         });
@@ -166,21 +187,48 @@ class FilterController {
 
     /**
      * テーブルにフィルターボタンを追加するメソッド
+     * 
+     * @returns {void}
      */
     insertFilerBtns(){
-        Array.prototype.forEach.call(this.filterTable.columns,(column,index) => {
-            const filterIcon = new FilterIcon(index);
-            column.appendChild(filterIcon.icon);
-            filterIcon.modal.filterList.init(this.filterTable.rows,index);
+        
+        Array.prototype.forEach.call(this.filterTable.columns,(column,index) => {   // テーブルの全列をループ
 
-            filterIcon.icon.addEventListener('click', e => {
-                filterIcon.modal.open(e)
+            const filterIcon = new FilterIcon(index);   // アイコンを生成
+
+            column.appendChild(filterIcon.icon);    // 列にカラムを追加
+
+            filterIcon.modal.filterList.init(this.filterTable.rows,index);     // フィルターリストを初期化
+
+            filterIcon.icon.addEventListener('click', e => {    // アイコンにモーダルを開く処理を追加
+                
+                if(filterIcon.isClick(e)){  // アイコンのクリック可否を判定
+                    
+                    for(let icon of this.filterTable.filterIcons){  // 全アイコンをループ
+                        
+                        if(icon.columnIndex === index){     // モーダル列番号と今回ボタンを押されたモーダル列番号が同じ場合
+
+                            icon.modal.open();  // モーダルを開く
+
+                        }else{  // それ以外の場合
+
+                            icon.modal.close();     // モーダルを閉じる
+                        }
+                    }
+
+                    filterIcon.modal.filterList.saveCurrentCheckValues();   // 開いた時点のチェックされた値を保存
+
+                }else{  // それ以外の場合
+                    
+                }
             });
 
+            // 実行ボタンにフィルター実行処理を登録
             filterIcon.modal.exeBtn.addEventListener('click',e =>{
                 this.execute(e)
             });
 
+            // キャンセルボタンイベントをに閉じる処理を登録
             filterIcon.modal.cancelBtn.addEventListener('click',() => {
                 filterIcon.modal.close();
             });
@@ -188,6 +236,10 @@ class FilterController {
             filterIcon.modal.searchTextBox.textBox.addEventListener('keydown',() => {
                 filterIcon.modal.searchTextBox.seaching(filterIcon.modal.filterList.listContainer.children);
             });
+
+            filterIcon.modal.filterList.allSelector.checkbox.checkbox.addEventListener('change',() => {
+                filterIcon.modal.filterList.checkAll();
+            })
 
             this.filterTable.filterIcons.push(filterIcon);
         })
@@ -201,6 +253,8 @@ class FilterIcon {
 
     /**
      * FilterIcon - コンストラクタ
+     * 
+     * @param {number} index 追加するテーブルヘッダーの列番号[0,1,2...]
      */
     constructor(index){
         this.columnIndex = index;
@@ -210,6 +264,30 @@ class FilterIcon {
         this.modal = new FilterModal();
         this.icon.appendChild(this.modal.modal);
     }
+
+    /**
+     * 要素の色を変える
+     * 
+     * @param {string} fontColor 文字の色
+     * @param {string} backgroundColor 背景の色
+     * @returns {void}
+     */
+    color(fontColor,backgroundColor){
+        this.icon.style.color = fontColor;
+        this.icon.style.background = backgroundColor;
+    }
+
+    /**
+     * アイコンをクリックしているか判定
+     */
+    isClick(e){
+        if(e.target === this.icon){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
 }
 
 /**
@@ -229,34 +307,27 @@ class FilterModal {
         this.modal.appendChild(this.searchTextBox.textBox);
         this.exeBtn = document.createElement('button');
         this.exeBtn.innerHTML = '実行';
+        this.exeBtn.className = 'btn';
         this.modal.appendChild(this.exeBtn);
         this.cancelBtn = document.createElement('button');
         this.cancelBtn.innerHTML = '閉じる';
+        this.cancelBtn.className = 'btn';
         this.modal.appendChild(this.cancelBtn)
     }
 
     /**
      * フィルターボタン押下時、モーダルを表示する
      * 
-     * @param {object} e クリックイベントオブジェクト
+     * @returns {void}
      */
-    open(e) {
-        if(e.target.getElementsByClassName('filter-modal')[0] === undefined){
-            return;
-        }else{
-
-            for(let modal of document.getElementsByClassName('filter-modal')){
-                if(e.target.getElementsByClassName('filter-modal')[0] == modal){
-                    modal.style.visibility = 'visible';
-                }else{
-                    modal.style.visibility = 'hidden';
-                }  
-            }
-        }
+    open() {
+        this.modal.style.visibility = 'visible';
     }
 
     /**
      * モーダルを閉じる
+     * 
+     * @returns {void}
      */
     close(){
         this.modal.style.visibility = 'hidden';
@@ -264,9 +335,15 @@ class FilterModal {
 
     /**
      * モーダルがフィルターされているか（いずれかの値のチェックが外れているか）
+     * 
+     * @returns {bool} フィルターされている場合はtrue,それ以外はfalse
      */
     isFilter(){
-        Array.prototype.some.call(this.filterList.listContainer.children,checkWrap => {
+        const visibleList = Array.prototype.filter.call(this.filterList.listContainer.children,checkWrap => {
+            return !checkWrap.classList.contains('hide');
+        });
+
+        return Array.prototype.some.call(visibleList,checkWrap => {
             return checkWrap.children[0].checked == false && checkWrap.children[0].value != 'all';
         });
     }
@@ -276,40 +353,74 @@ class FilterModal {
  * フィルターリストオブジェクト
  */
 class filterList {
+
+    /**
+     * FilterList - コンストラクタ
+     */
     constructor(){
         this.listContainer = document.createElement("div");
         this.listContainer.className = "filter-list";
+        this.allSelector = '';
+        this.hideList = {};
+        this.checkedValues = [];
     }
 
     /**
-     * リストの値を取得する
-     * 
-     * @return {array} チェックされているチェックボックスのvalue値の配列
+     * 現在チェックされている値を保存する
+     */
+    saveCurrentCheckValues(){
+        this.checkedValues = this.getCheckedValues();
+    }
+
+    /**
+     * 現在のリストでチェックされている値を表示する
      */
     getCheckedValues(){
-        return Array.prototype.reduce.call(this.listContainer.children,(acc,checkWrap) => {
-            console.log(checkWrap)
-            const checkbox = checkWrap.children[0];
-            if(checkbox.checked == true){
-                acc.push(checkWrap.children[0].value);
+        return Array.prototype.filter.call(this.listContainer.children,checkWrap => {
+            return checkWrap.children[0].checked == true;
+        });
+    }
+
+    /**
+     * 前回の値と同じかどうか判定する
+     */
+    isSame(){
+        const beforeValues = this.checkedValues;
+        const currentValues = this.getCheckedValues();
+        console.log(beforeValues,currentValues)
+
+        // 今の値と同じ場合
+        if(beforeValues.length !== currentValues.length){
+
+            // falseを返却
+            return false;
+        }
+
+        // 開いた時の値をループ
+        for(let i = 0; i < beforeValues.length; i++){
+            // 値が違う場合
+            if(beforeValues[i] !== currentValues[i]){
+
+                // falseを返却
+                return false;
             }
-            return acc;
-        },[]);
+        }
+        return true;
     }
 
     /**
      * 全リストのチェック状態を取得する
+     * 
+     * @returns {Array} チェックボックスのvalue値をプロパティに持ち、チェック状態をtrue,falseで保持する連想配列
      */
-    getChekingStatus(){
+    getCheckingStatus(){
         return Array.prototype.reduce.call(this.listContainer.children,(acc,checkWrap) => {
-            console.log(checkWrap)
             const checkbox = checkWrap.children[0];
             if(checkbox.checked == true){
                 acc[checkbox.value] = true;
             }else{
                 acc[checkbox.value] = false;
             }
-            console.log(acc)
             return acc;
         },{});
     }
@@ -317,7 +428,7 @@ class filterList {
     /**
      * チェックボックスラッパーを追加する
      * 
-     * @return {object} checkboxとlabelを配下に持つdiv要素
+     * @returns {HTMLDivElement} checkboxとlabelを配下に持つdiv要素
      */
     add(checkboxName,checkboxValue,labelText,id){
         const checkboxAndLabel = new CheckboxAndLabel(checkboxName,checkboxValue,labelText,id);
@@ -327,147 +438,127 @@ class filterList {
 
     /**
      * リストを初期化するメソッド
+     * 
+     * @param {Array} visibleRows HTMLテーブルの行データ配列
+     * @param {number} index 列番号
+     * @returns {void}
      */
     init(visibleRows,index){
-        console.log(visibleRows)
         // 'すべて'選択肢を追加する
         const all = this.add(`select-${index}-all`,'all','すべて',`select-${index}-all`);
-        const allChekedFunc = () =>{
-            const checkboxes = this.listContainer.children
-            if(all.checkbox.checkbox.checked){
-                Array.prototype.forEach.call(checkboxes,checkWrap => {
-                    checkWrap.children[0].checked = true;
-                }) ;
-            }else{      
-                Array.prototype.forEach.call(checkboxes,checkWrap => {
-                    checkWrap.children[0].checked = false;
-                }) ;
-            }
-        }
-        all.checkbox.addChangeEvent(allChekedFunc);
         all.checkbox.checkbox.checked = true; 
-            
-        // '空白'選択肢を追加する
-        const blank = this.add(`select-${index}`,'','空白',`select-${index}-blank`);
-        blank.checkbox.checkbox.checked = true;
+        this.allSelector = all;
 
-        // visibleRowsの重複削除して値だけ配列に変換
-        this.update(visibleRows,index);
+        // 重複削除
+        const keywords = this.deletedDuplicate(visibleRows,index);
+
+        // 値配列分追加する
+        for(let keyword of keywords){
+            const checkboxName = `select-${index}`;
+            const id = `${index}-${keyword}`;
+            const value = this.add(checkboxName,keyword,keyword,id);
+            value.checkbox.checkbox.checked = true;
+        }
     }
 
     /**
-     * リストの中身を更新
+     * 特定の列の値且つ重複を省いた配列を返す
+     * 
+     * @param {Array} visibleRows HTMLテーブルの行データ配列
+     * @param {number} columnIndex 列番号
+     * @returns {Array} HTMLテーブルの特定列の重複を除いた文字列の配列
      */
-    update(visibleRows,index){
-        console.log(visibleRows)
-        // 重複削除
-        const deletedDuplicateKeywords = Array.prototype.reduce.call(visibleRows,(acc,row) => {
-            const keyword = row.children[index].innerHTML;
+    deletedDuplicate(visibleRows,columnIndex){
+        return Array.prototype.reduce.call(visibleRows,(acc,row) => {
+            const keyword = row.children[columnIndex].innerHTML;
             if(!acc.includes(keyword)){
                 acc.push(keyword);
             }
             return acc;
         },[]);
-
-        console.log(deletedDuplicateKeywords);
-
-        // 現在の値を抽出する
-        console.log(this)
-        const currentValues = this.getCheckedValues();
-        console.log(currentValues);
-
-        // 値配列分追加する
-        for(let keyword of deletedDuplicateKeywords){
-            if(!currentValues.includes(keyword)){
-                const checkboxName = `select-${index}`;
-                const id = `${index}-${keyword}`;
-                const value = this.add(checkboxName,keyword,keyword,id);
-                value.checkbox.checkbox.checked = true;
-            }else{
-
-            }
-        }
     }
 
     /**
-     * モーダルリストの表示を切り替える
+     * モーダルリストの表示を見えているものだけに切り替える
+     * 
+     * @param {Array} visibleRows HTML<tr>要素の配列
+     * @param {number} columnIndex このモーダルの列番号
+     * @param {number} modalIndex 実行中モーダルの列番号
+     * @returns {void}
      */
-    switchingDisplay(deleteRows,regenerateRows,columnIndex,lastFilterIndex){
-        
-        const deleteValues = deleteRows.map(deleteRow => {
-            return deleteRow.children[columnIndex].innerHTML;
-        });
-        const regenerateValues = regenerateRows.map(regenerateRow => {
-            return regenerateRow.children[columnIndex].innerHTML;
-        });
+    switchingDisplay(visibleRows,columnIndex,modalIndex){
+        const keywords = this.deletedDuplicate(visibleRows,columnIndex);
+        console.log(keywords)
 
+        // リストをループ
         Array.prototype.forEach.call(this.listContainer.children,checkWrap => {
             const checkbox = checkWrap.children[0];
             const listValue = checkbox.value;
-            if(deleteValues.includes(listValue)){
-                if(columnIndex == lastFilterIndex){
-                    checkWrap.style.display = '';
+
+            // チェックボックスの値が重複削除値に含まれる場合
+            if(keywords.includes(listValue)){
+
+                // 表示する
+                checkWrap.classList.remove('hide');
+                
+                // チェックをつける
+                checkbox.checked = true;
+            }else{
+
+                // チェックボックスの値が重複削除値に含まれない場合
+                if(listValue != 'all'){
+
+                    // 隠す
+                    checkWrap.classList.add('hide');
+                    this.hideList[modalIndex] = [];
+                    this.hideList[modalIndex].push(checkWrap);
+
+                    // チェックを外す
                     checkbox.checked = false;
                 }else{
-                    checkWrap.style.display = 'none';
+
                 }
             }
         });
-
-        regenerateValues.forEach(regenerateValue => {
-            
-            const checkboxName = `select-${columnIndex}`;
-            const id = `${columnIndex}-${regenerateValue}`;
-            const value = this.add(checkboxName,regenerateValue,regenerateValue,id);
-            value.checkbox.checkbox.checked = true;
-        });
-        // // 重複削除
-        // const deletedDuplicateKeywords = Array.prototype.reduce.call(visibleRows,(acc,row) => {
-        //     const keyword = row.children[index].innerHTML;
-        //     if(!acc.includes(keyword)){
-        //         acc.push(keyword);
-        //     }
-        //     return acc;
-        // },[]);
-        // console.log(deletedDuplicateKeywords)
-        // // 現在チェックが入っている値の配列
-        // const currentWraps = Array.prototype.reduce.call(this.listContainer.children,(acc,checkWrap) => {
-        //     console.log(checkWrap)
-        //     const checkbox = checkWrap.children[0];
-        //     if(checkbox.checked == true){
-        //         acc.push(checkWrap);
-        //     }
-        //     return acc;
-        // },[]);
-
-        // // チェック済み配列のループ
-        // for (let i = 2; i < currentWraps.length; i++){
-        //     const value = currentWraps[i].children[0].value;
-
-        //     // チェックボックスのvalueが行配列に含まれていなければ
-        //     if(!deletedDuplicateKeywords.includes(value)){
-        //         console.log('この値は含まれません',value);
-        //         if(value != 'all' && value != '' ){
-        //             currentWraps[i].style.display = 'none';
-        //         }  
-
-        //     }else{
-        //         currentWraps[i].style.display = '';
-        //     }
-        // }
     }
 
     /**
-     * チェックされているかを判定する
+     * 隠れたリストを再表示
      * 
-     * @param {object} checkWrap チェックボックスラッパーオブジェクト
-     * @return {bool} チェックされている場合、true、それ以外false
+     * @param {number} modalIndex 実行中モーダルの列番号
+     * @returns {void}
      */
-    isChecked(checkWrap){
-        return checkWrap.children[0].checked;
+    redisplay(modalIndex){
+        // 全リストをループ
+        this.hideList[modalIndex].forEach(checkWrap => {
+            checkWrap.classList.remove('hide');
+        });
     }
+
+    /**
+     * 全ての値にチェックを入れる、または外す処理
+     */
+    checkAll(){
+        const checkboxes = Array.prototype.filter.call(this.listContainer.children,checkWrap => {
+            return !checkWrap.classList.contains('hide');
+        });
+
+        if(this.allSelector.checkbox.checkbox.checked){
+            Array.prototype.forEach.call(checkboxes,checkWrap => {
+                checkWrap.children[0].checked = true;
+            });
+        }else{      
+            Array.prototype.forEach.call(checkboxes,checkWrap => {
+                checkWrap.children[0].checked = false;
+            });
+        }
+    }
+
 }
 
+/**
+ * チェックボックスとラベルのインスタンスを生成するクラス
+ */
 class CheckboxAndLabel {
 
     /**
@@ -510,6 +601,7 @@ class Checkbox {
      * チェックボックスに名前を設定する
      * 
      * @param {string} checkboxName name属性値
+     * @returns {void}
      */
     setName(checkboxName){
         this.checkbox.setAttribute('name',checkboxName);
@@ -519,6 +611,7 @@ class Checkbox {
      * value値を設定する
      * 
      * @param {string} checkboxValue value属性値
+     * @returns {void}
      */
     setValue(checkboxValue){
         this.checkbox.value = checkboxValue;
@@ -528,6 +621,7 @@ class Checkbox {
      * idを設定する
      * 
      * @param {string} id id属性値
+     * @returns {void}
      */
     setId(id){
         this.checkbox.id = id
@@ -535,32 +629,12 @@ class Checkbox {
 
     /**
      * changeイベントリスナーに追加するメソッド
+     * 
+     * @param {Function}
+     * @returns {void}
      */
     addChangeEvent(func){
         this.checkbox.addEventListener('click',func);
-    }
-
-    /**
-     * チェックをつける
-     */
-    checking(){
-        this.checkbox.checked = true;
-    }
-
-    /**
-     * チェックを外す
-     */
-    removing(){
-        this.checkbox.checked = false;
-    }
-
-    /**
-     * チェックがついているか判定する
-     * 
-     * @return {bool} チェックがついていればtrue,チェックがついていなければfalse
-     */
-    isCheck(){
-        return this.checkbox.checked;
     }
 }
 
@@ -568,16 +642,35 @@ class Checkbox {
  * ラベルインスタンスを生成するクラス
  */
 class Label {
+
+    /**
+     * Label - コンストラクタ
+     * 
+     * @param {number} id 
+     * @param {string} labelText 
+     */
     constructor(id,labelText){
         this.label = document.createElement('label');
         this.setFor(id);
         this.setText(labelText);
     }
 
+    /**
+     * インナーHTMLを設定する
+     * 
+     * @param {string} labelText
+     * @returns {void} 
+     */
     setText(labelText){
         this.label.innerHTML = labelText;
     }
 
+    /**
+     * for属性に値を設定させる
+     * 
+     * @param {string} id 
+     * @returns {void}
+     */
     setFor(id){
         this.label.setAttribute('for',id);
     }
@@ -594,19 +687,20 @@ class SearchTextBox {
     constructor(){
         this.textBox = document.createElement('input');
         this.textBox.className = 'search-box';
+        this.textBox.setAttribute('placeholder','検索(Enterで確定)')
     }
 
     /**
      * 検索を実行するメソッド
+     * 
+     * @param {Array} filterList フィルターの配列
+     * @returns {void}
      */
     seaching(filterList){
-        console.log(filterList)
-        const searchValue = this.textBox.value.toLowerCase();
+        const searchValue = this.textBox.value;
         for (let checkWrap of filterList) {
             const checkbox = checkWrap.children[0];
-            console.log(checkbox)
-            const value = checkbox.value.toLowerCase();
-            if (value !== 'all' && value !== ''){return};
+            const value = checkbox.value;
             if (value.indexOf(searchValue) > -1) {
                 checkWrap.style.display = '';
             } else {
