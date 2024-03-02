@@ -1,34 +1,3 @@
-window.addEventListener("load", () => {
-    const tables = document.getElementsByClassName("bulk-table");
-    const btnParams = [
-        [
-            'メールを送信',
-            function(checkedValues){
-                checkedValues.forEach(value => {
-                    console.log(`${value[4]}にメールを送信しました`);
-                });
-            }
-        ],
-        [
-            '合格にする',
-            function(checkedValues){
-                checkedValues.forEach(value => {
-                    console.log(`${value[3]}は合格です`);
-                });
-            }
-        ]
-    ]
-    Array.prototype.forEach.call(tables, (table,index) => {
-      const bulkTable = new BulkTable(table);
-      const bulkCtrl = new BulkController(bulkTable);
-      bulkCtrl.insertCheckBox(index);
-      bulkCtrl.insertBulkBtns(btnParams);
-      console.log(bulkCtrl);
-    });
-});
-    
-    
-
 /**
  * 一括操作テーブルクラス
  */
@@ -87,6 +56,13 @@ class BulkTable {
         return Array.prototype.filter.call(this.rows,row=>{
             return !row.className.includes('hide');
         });
+    }
+
+    /**
+     * 行を追加する
+     */
+    addRow(){
+
     }
 
 }
@@ -152,17 +128,28 @@ class BulkController {
         }
 
     /**
-     * 一括操作ボタンを挿入する
+     * 一括操作ボタンを生成する
+     * 
+     * @returns {Array} 一括操作ボタンインスタンスの配列
      */
-    insertBulkBtns(btnParams){
-        btnParams.forEach(btnParam => {
+    createBulkBtns(btnParams){
+        return btnParams.map(btnParam => {
             const btn = new BulkBtn(btnParam[0]);
             console.log(btnParam)
             btn.btn.addEventListener('click',() => {
                 this.execute(btnParam[1])
             });
-            console.log(this.bulkTable.tfoot);
-            this.bulkTable.tfoot.appendChild(btn.btn)
+            return btn;
+            // this.bulkTable.tfoot.appendChild(btn.btn)
+        });
+    }
+
+    /**
+     * 一括操作ボタンを挿入する
+     */
+    insertBulkBtns(btns){
+        btns.forEach(btn => {
+            this.bulkTable.tfoot.appendChild(btn.btn);
         });
     }
 
@@ -173,9 +160,9 @@ class BulkController {
         // チェックされている値を取得
         const checkedValues = this.bulkTable.getCheckedValues();
 
+        // 一つ以上行が選択されている場合
         if(checkedValues.length > 0){
-            callback(checkedValues);
-
+            callback(checkedValues,this);
         }
     }
 
@@ -189,10 +176,65 @@ class BulkBtn {
         this.btn = document.createElement('button');
         this.btn.innerHTML = btnText;
     }
+
+    /**
+     * 実行される関数
+     */
+    run(callback){
+        callback();
+    }
 }
 
 /**
- * 行を追加するボタンクラス
+ * 非同期処理を含むボタンクラス
  */
+class AsyncBulkBtn extends BulkBtn {
+    constructor(btnText){
+        super(btnText);
+        this.request = new RequestManager()
+        this.header = {};
+    }
 
+    /**
+     * 非同期処理
+     */
+    run(afterFunc){
+        this.request.send()
+        afterFunc();
+    }
+}
 
+/**
+ * 非同期のリクエストオブジェクト
+ */
+class RequestManager{
+    constructor(endpoint,headers){
+        this.endpoint = endpoint;
+        this.headers = headers;
+    }
+
+    /**
+     * リクエストを送信してレスポンスを返却する
+     */
+    send(){
+        fetch(this.endpoint,{
+            method:this.method,
+            headers:this.headers
+        })
+        .then(response => {return response});
+    }
+
+    /**
+     * ヘッダーを生成する
+     */
+    createHeader(){
+
+    }
+
+    /**
+     * ペイロードを生成する
+     */
+    createPayload(){
+        
+    }
+}
